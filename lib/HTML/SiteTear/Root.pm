@@ -5,17 +5,21 @@ use warnings;
 use File::Spec;
 use File::Basename;
 use Cwd;
+use URI::file;
 use base qw(Class::Accessor);
 HTML::SiteTear::Root->mk_accessors(qw(source_path
-									resource_folder_name
-									page_folder_name
-									target_path
+                                    source_root_uri
+                                    resource_folder_name
+                                    page_folder_name
+                                    target_path
                                     site_root_path
-                                    site_root_url
-                                    allow_abs_link));
+                                    site_root_file_uri
+                                    site_root_uri
+                                    allow_abs_link
+                                    only_subitems));
 #use Data::Dumper;
 
-our $VERSION = '1.30';
+our $VERSION = '1.40';
 
 =head1 NAME
 
@@ -23,9 +27,10 @@ HTML::SiteTear::Root - a root object in a parent chain.
 
 =head1 SYMPOSIS
 
- use HTML::SiteTear::Root;
+  use HTML::SiteTear::Root;
 
- $root = HTML::SiteTear::Root->new($source_path, $target_path);
+  $root = HTML::SiteTear::Root->new('source_path' => $source_path,
+                                    'target_path' => $destination_path);
 
 =head1 DESCRIPTION
 
@@ -46,22 +51,28 @@ our $defaultresource_folder_name = 'assets';
 make a new instance.
 
 =cut
+
 sub new {
-	my $class = shift @_;
-	my %args = @_;
-	my $self = $class->SUPER::new(\%args);
-	$self->{'fileMapRef'} = {};
-	$self->{'copiedFiles'} = [];
-	$self->set_default_folder_names;
-    $self->allow_abs_link($self->site_root_path and $self->site_root_url);
+    my $class = shift @_;
+    my %args = @_;
+    my $self = $class->SUPER::new(\%args);
+    $self->{'fileMapRef'} = {};
+    $self->{'copiedFiles'} = [];
+    $self->set_default_folder_names;
     
-	return $self;
+    if ($self->site_root_path and $self->site_root_uri) {
+        $self->allow_abs_link(1);
+        $self->site_root_file_uri(URI::file->new($self->site_root_path));
+        $self->site_root_uri(URI->new($self->site_root_uri));
+    }
+    $self->source_root_uri(URI::file->new($self->source_path));
+    return $self;
 }
 
 sub set_default_folder_names {
-	my ($self) = @_;
-	$self->resource_folder_name($defaultresource_folder_name);
-	$self->page_folder_name($defaultpage_folder_name);
+    my ($self) = @_;
+    $self->resource_folder_name($defaultresource_folder_name);
+    $self->page_folder_name($defaultpage_folder_name);
 }
 
 =head2 add_to_copyied_files
@@ -71,11 +82,12 @@ sub set_default_folder_names {
 Add a file path already copied to the copiedFiles table of the root object of the parent chain.
 
 =cut
+
 sub add_to_copyied_files {
-	my ($self, $path) = @_;
-	#$path = Cwd::realpath($path);
-	push @{$self->{'copiedFiles'}}, $path;
-	return $path;
+    my ($self, $path) = @_;
+    #$path = Cwd::realpath($path);
+    push @{$self->{'copiedFiles'}}, $path;
+    return $path;
 }
 
 =head2 exists_in_copied_files
@@ -85,9 +97,10 @@ sub add_to_copyied_files {
 Check existance of $source_path in the copiedFiles entry.
 
 =cut
+
 sub exists_in_copied_files {
-	my ($self, $path) = @_;
-	return grep(/^$path$/, @{$self->{'copiedFiles'}});
+    my ($self, $path) = @_;
+    return grep(/^$path$/, @{$self->{'copiedFiles'}});
 }
 
 =head2 add_to_filemap
@@ -97,10 +110,11 @@ sub exists_in_copied_files {
 add to copyied file information into the internal table "filemap".
 
 =cut
+
 sub add_to_filemap {
-	my ($self, $source_path, $destination_path) = @_;
-	$self->{'fileMapRef'}->{$source_path} = $destination_path;
-	return $destination_path;
+    my ($self, $source_path, $destination_path) = @_;
+    $self->{'fileMapRef'}->{$source_path} = $destination_path;
+    return $destination_path;
 }
 
 =head2 exists_in_filemap
@@ -110,27 +124,31 @@ sub add_to_filemap {
 check $source_path is entry in FileMap
 
 =cut
+
 sub exists_in_filemap {
-	my ($self, $path) = @_;
-	return exists($self->{fileMapRef}->{$path});
+    my ($self, $path) = @_;
+    return exists($self->{fileMapRef}->{$path});
 }
 
 sub item_in_filemap {
-	my ($self, $path) = @_;
-	return $self->{'fileMapRef'}->{$path};
+    my ($self, $path) = @_;
+    return $self->{'fileMapRef'}->{$path};
 }
 
 =head2 rel_for_mappedfile
 
-    $root->rel_for_mappedfile($source_path, $base);
+    $root->rel_for_mappedfile($source_path, $base_uri);
 
-get relative path of copied file of $sourceFile from $base.
+get relative path of copied file of $source_path from $base_uri.
 
 =cut
+
 sub rel_for_mappedfile {
-	my ($self, $source_path, $base) = @_;
-	my $destination_path = ($self->{'fileMapRef'}->{$source_path});
-	return File::Spec->abs2rel($destination_path, $base);
+    my ($self, $source_path, $base_uri) = @_;
+#    my $destination_path = ($self->{'fileMapRef'}->{$source_path});
+#    return File::Spec->abs2rel($destination_path, $base);
+    my $target_uri = $self->{'fileMapRef'}->{$source_path};
+    return $target_uri->rel($base_uri)->as_string;
 }
 
 sub source_root_path {
