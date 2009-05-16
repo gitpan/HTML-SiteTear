@@ -7,10 +7,9 @@ use File::Spec;
 use File::Basename;
 use File::Copy;
 use File::Path;
-use Cwd;
+#use Cwd;
 use URI::file;
 use Data::Dumper;
-
 
 use base qw(Class::Accessor);
 __PACKAGE__->mk_accessors(qw(linkpath
@@ -28,7 +27,7 @@ require HTML::SiteTear::Page;
 require HTML::SiteTear::CSS;
 
 
-our $VERSION = '1.42';
+our $VERSION = '1.43';
 
 =head1 NAME
 
@@ -96,14 +95,15 @@ sub copy_to_linkpath {
             $target_path = $self->link_uri->file;
         }
         
-        print "Copying asset...\n";
+        print "\nCopying asset...\n";
         print "from : $source_path\n";
-        print "to : $target_path\n\n";
+        print "to : $target_path\n";
         ($source_path eq $target_path) and die "source and target is same file.\n";
         mkpath(dirname($target_path));
         copy($source_path, $target_path);
         $self->add_to_copyied_files($source_path);
-        $self->target_path(Cwd::abs_path($target_path));
+        #$self->target_path(Cwd::abs_path($target_path));
+        $self->target_path($target_path);
     }
 }
 
@@ -145,14 +145,14 @@ sub change_path {
     $uri = $uri->abs($self->base_uri);
     my $abs_path = $uri->file;
     unless (-e $abs_path) {
-        warn("$abs_path is not found.\nThe link to this path is not changed.\n");
+        warn("\n$abs_path is not found.\nThe link to this path is not changed.\n");
         return $linkpath;
     }
     
-    $abs_path = Cwd::realpath($abs_path);
-    
+    #$abs_path = Cwd::abs_path($abs_path);
+    #print "abs_path in change_path:".$abs_path."\n";
     if ($self->exists_in_filemap($abs_path) ) {
-        $result_path 
+        $result_path
            = $self->rel_for_mappedfile($abs_path, $self->target_uri);
         $result_path->fragment($fragment);
     } else {
@@ -341,14 +341,18 @@ sub source_path {
     my $self = shift @_;
     
     if (@_) {
-        my $path = Cwd::abs_path($_[0]);
+        #my $path = Cwd::abs_path($_[0]);
+        my $path = shift @_;
         $self->{'source_path'} = $path;
-        my $uri = URI::file->new($path);
+        my $uri = URI::file->new_abs($path);
         $self->source_uri($uri);
         $self->base_uri($uri);
     }
-    
-    return $self->{'source_path'};
+    if ($self->source_uri) {
+        return $self->source_uri->file;
+    } else {
+        return $self->{'source_path'};
+    }
 }
 
 =head2 target_path

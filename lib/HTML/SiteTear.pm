@@ -5,7 +5,9 @@ use strict;
 use warnings;
 use File::Basename;
 use File::Spec;
-use Cwd;
+use File::Path;
+use File::Find;
+#use Cwd;
 use Carp;
 use base qw(Class::Accessor);
 __PACKAGE__->mk_accessors( qw(source_path
@@ -17,7 +19,7 @@ __PACKAGE__->mk_accessors( qw(source_path
 use HTML::SiteTear::Root;
 use HTML::SiteTear::Page;
 
-#use Data::Dumper;
+use Data::Dumper;
 
 =head1 NAME
 
@@ -25,11 +27,11 @@ HTML::SiteTear - Make a separated copy of a part of the site
 
 =head1 VERSION
 
-Version 1.42
+Version 1.43
 
 =cut
 
-our $VERSION = '1.42';
+our $VERSION = '1.43';
 
 =head1 SYMPOSIS
 
@@ -61,6 +63,8 @@ Make an instance of this module. The path to source HTML file "$source_path" is 
 
 =cut
 
+our @DEFAULT_HTML_SUFFIXES = qw(.html .htm .xhtml);
+
 sub new {
     my $class = shift @_;
     my $self;
@@ -77,13 +81,26 @@ sub new {
     
     if (-d $self->source_path) {
         unless ($self->member_files) {
-            croak $self->source_path." is a directory. Must be a file.\n";
+            my @htmlfiles;
+            my $wanted = sub {
+                my $name = $_; 
+                if (grep {$name =~ /\Q$_\E$/} @DEFAULT_HTML_SUFFIXES) {
+                    push @htmlfiles, $File::Find::name;
+                }
+            };
+            find($wanted, $self->source_path);
+            if (@htmlfiles) {
+                $self->member_files(\@htmlfiles);
+            } else {
+                croak "Can't find HTML files under $self->source_path.\n";
+            }
         }
         $self->source_path(fix_dir_path($self->source_path));
         
     } else {
         if ($self->member_files) {
-            croak $self->source_path." is not a directory. Must be a directory.\n";
+            croak $self->source_path.
+                    " is not a directory. Must be a directory.\n";
         }    
     }
         
@@ -104,7 +121,7 @@ Copy $source_path into $destination_path. All linked file in $source_path will b
 =cut
 
 sub copy_to {
-    #print "start copyTo in SiteTear.pm\n";
+    #print "start copy_to in SiteTear.pm\n";
     my ($self, $destination_path) = @_;
     my $source_path = $self->source_path;
     if ($self->member_files) {
@@ -116,6 +133,13 @@ sub copy_to {
             $destination_path = File::Spec->catfile($destination_path,
                                                basename($source_path));
         }
+    } else {
+        my ($name, $dir) = fileparse($destination_path);
+        mkpath($dir);
+        unless ($name) {
+            $destination_path = File::Spec->catfile($dir,
+                                                basename($source_path));
+        }
     }
     
     $self->target_path($destination_path);
@@ -124,7 +148,8 @@ sub copy_to {
                                         'parent' => $root,
                                         'source_path' => $source_path);
     $new_source_page->linkpath( basename($destination_path) );
-    $new_source_page->link_uri(URI::file->new(Cwd::abs_path($destination_path)));
+    #$new_source_page->link_uri(URI::file->new(Cwd::abs_path($destination_path)));
+    $new_source_page->link_uri(URI::file->new_abs($destination_path));
     $new_source_page->copy_to_linkpath;
     return $new_source_page;
 }
@@ -152,8 +177,11 @@ sub copy_to_dir {
     foreach my $file (@{$self->member_files}) {
         my $a_member_file = $file;
         unless (File::Spec->file_name_is_absolute($a_member_file)) {
-            $a_member_file = File::Spec->rel2abs($a_member_file, $self->source_path);
-            $a_member_file = Cwd::abs_path($a_member_file);
+            #$a_member_file = File::Spec->rel2abs($a_member_file,
+            #                                    $self->source_path);
+            #$a_member_file = Cwd::abs_path($a_member_file);
+            $a_member_file = URI::file->new($a_member_file)
+                                   ->abs($self->source_path)->file;
         }
         my $page = HTML::SiteTear::Page->new(
                                             'parent' => $root,

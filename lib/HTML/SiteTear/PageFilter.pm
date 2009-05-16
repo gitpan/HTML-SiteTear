@@ -6,7 +6,7 @@ use File::Basename;
 use Encode;
 use Encode::Guess;
 use URI;
-use Data::Dumper;
+#use Data::dumper;
 
 use HTML::Parser 3.40;
 use HTML::HeadParser;
@@ -16,8 +16,8 @@ __PACKAGE__->mk_accessors(qw(has_remote_base
 
 use HTML::Copy;
 
-our $VERSION = '1.40';
-our @htmlSuffix = qw(.html .htm);
+our $VERSION = '1.43';
+our @htmlSuffix = qw(.html .htm .xhtml);
 
 =head1 NAME
 
